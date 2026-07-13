@@ -1,0 +1,16 @@
+com\rapidocourier\servicio_paquetes\client\PagosClient.class
+com\rapidocourier\servicio_paquetes\client\NotificacionesClient.class
+com\rapidocourier\servicio_paquetes\config\TarifaProperties.class
+com\rapidocourier\servicio_paquetes\ServicioPaquetesApplication.class
+com\rapidocourier\servicio_paquetes\dto\response\PaqueteResponse.class
+com\rapidocourier\servicio_paquetes\entity\Paquete.class
+com\rapidocourier\servicio_paquetes\config\RabbitMQConfig.class
+com\rapidocourier\servicio_paquetes\controller\PaqueteController.class
+com\rapidocourier\servicio_paquetes\entity\Categoria.class
+com\rapidocourier\servicio_paquetes\client\ClienteClient.class
+com\rapidocourier\servicio_paquetes\exception\ErrorCode.class
+com\rapidocourier\servicio_paquetes\dto\response\ClienteResponse.class
+com\rapidocourier\servicio_paquetes\repository\CategoriaRepository.class
+com\rapidocourier\servicio_paquetes\service\PaqueteService.class
+com\rapidocourier\servicio_paquetes\dto\request\PaqueteRequest.class
+com\rapidocourier\servicio_paquetes\repository\PaqueteRepository.class

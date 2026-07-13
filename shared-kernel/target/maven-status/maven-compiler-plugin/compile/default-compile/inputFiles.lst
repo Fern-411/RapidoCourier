@@ -1,0 +1,9 @@
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\dto\response\ApiResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\dto\response\PaginaResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\event\NotificacionEvent.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\event\PaqueteRegistradoEvent.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\BaseException.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\CodigoError.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\ErrorCode.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\GlobalExceptionHandler.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\SharedKernelApplication.java

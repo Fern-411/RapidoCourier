@@ -1,0 +1,16 @@
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\ClienteClient.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\NotificacionesClient.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\PagosClient.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\config\RabbitMQConfig.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\config\TarifaProperties.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\controller\PaqueteController.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\request\PaqueteRequest.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\response\ClienteResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\response\PaqueteResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\Categoria.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\Paquete.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\exception\ErrorCode.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\repository\CategoriaRepository.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\repository\PaqueteRepository.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\service\PaqueteService.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\ServicioPaquetesApplication.java

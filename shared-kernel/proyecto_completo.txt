@@ -1,0 +1,234 @@
+﻿=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\SharedKernelApplication.java ===
+package com.rapidocourier.shared_kernel;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class SharedKernelApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SharedKernelApplication.class, args);
+	}
+
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\dto\response\ApiResponse.java ===
+package com.rapidocourier.shared_kernel.dto.response;
+
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class ApiResponse<T> {
+    private boolean success;
+    private String message;
+    private T data;
+
+    public ApiResponse() {
+    }
+
+    public ApiResponse(boolean success, String message, T data) {
+        this.success = success;
+        this.message = message;
+        this.data = data;
+    }
+
+    public boolean isSuccess() {
+        return success;
+    }
+
+    public void setSuccess(boolean success) {
+        this.success = success;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    public T getData() {
+        return data;
+    }
+
+    public void setData(T data) {
+        this.data = data;
+    }
+
+    public static <T> ApiResponse<T> ok(T data) {
+        return new ApiResponse<>(true, "OperaciÃ³n exitosa", data);
+    }
+
+    public static <T> ApiResponse<T> ok(String message, T data) {
+        return new ApiResponse<>(true, message, data);
+    }
+
+    public static <T> ApiResponse<T> error(String message) {
+        return new ApiResponse<>(false, message, null);
+    }
+    
+    public static <T> ApiResponse<T> error(String message, T data) {
+        return new ApiResponse<>(false, message, data);
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\dto\response\PaginaResponse.java ===
+package com.rapidocourier.shared_kernel.dto.response;
+
+import org.springframework.data.domain.Page;
+import java.util.List;
+
+/**
+ * Wrapper estÃ¡ndar, inmutable y optimizado para representar respuestas paginadas.
+ * Refactorizado a Record de Java 21 para asegurar compatibilidad nativa con Jackson y Redis.
+ */
+public record PaginaResponse<T>(
+        List<T> contenido,
+        int pagina,
+        int tamano,
+        long totalElementos,
+        int totalPaginas,
+        boolean ultima
+) {
+
+    /**
+     * Constructor compacto para calcular de forma automÃ¡tica el campo 'ultima'.
+     */
+    public PaginaResponse {
+        // Aseguramos que el contenido nunca viaje como nulo
+        if (contenido == null) {
+            contenido = List.of();
+        }
+    }
+
+    /**
+     * Mapea directamente un objeto Page de Spring Data a nuestra estructura estÃ¡ndar.
+     */
+    public static <T> PaginaResponse<T> desde(Page<T> dePagina) {
+        return new PaginaResponse<>(
+                dePagina.getContent(),
+                dePagina.getNumber(),
+                dePagina.getSize(),
+                dePagina.getTotalElements(),
+                dePagina.getTotalPages(),
+                dePagina.isLast() // Aprovecha el mÃ©todo nativo de Spring Data
+        );
+    }
+
+    /**
+     * Permite la creaciÃ³n manual en caso de paginaciones personalizadas hechas a mano.
+     * Mantiene compatibilidad exacta con las llamadas previas de tus servicios (Fix MarcaService).
+     */
+    public static <T> PaginaResponse<T> de(List<T> contenido, int pagina, int tamano,
+                                           long totalElementos, int totalPaginas) {
+        boolean esUltima = (pagina + 1) >= totalPaginas;
+        return new PaginaResponse<>(contenido, pagina, tamano, totalElementos, totalPaginas, esUltima);
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\BaseException.java ===
+package com.rapidocourier.shared_kernel.exception;
+import lombok.Getter;
+
+
+@Getter
+public class BaseException extends RuntimeException {
+    private final CodigoError codigoError;
+    private final Object[] args;
+
+    public BaseException(CodigoError codigoError, Object... args) {
+        super(codigoError.getMensajeDefault());
+        this.codigoError = codigoError;
+        this.args = args;
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\CodigoError.java ===
+package com.rapidocourier.shared_kernel.exception;
+
+import org.springframework.http.HttpStatus;
+
+public interface CodigoError {
+    String getCodigo();
+    String getMensajeDefault();
+    HttpStatus getHttpStatus();
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\ErrorCode.java ===
+package com.rapidocourier.shared_kernel.exception;
+
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+@Getter
+public enum ErrorCode implements CodigoError {
+
+    // Estos cÃ³digos cubren exactamente lo que pide el RNF-02
+    SOLICITUD_MAL_FORMADA("RC-400", "La solicitud contiene errores de formato", HttpStatus.BAD_REQUEST),
+    RECURSO_NO_ENCONTRADO("RC-404", "El recurso solicitado no existe", HttpStatus.NOT_FOUND),
+    CONFLICTO_ESTADO("RC-409", "Conflicto o transiciÃ³n de estado invÃ¡lida", HttpStatus.CONFLICT),
+    FALLO_EXTERNO("RC-502", "Error al comunicarse con un servicio externo (Ej. RENIEC)", HttpStatus.BAD_GATEWAY),
+    ERROR_INTERNO("RC-500", "Ha ocurrido un error inesperado en el servidor", HttpStatus.INTERNAL_SERVER_ERROR);
+
+    private final String codigo;
+    private final String mensajeDefault;
+    private final HttpStatus httpStatus;
+
+    ErrorCode(String codigo, String mensajeDefault, HttpStatus httpStatus) {
+        this.codigo = codigo;
+        this.mensajeDefault = mensajeDefault;
+        this.httpStatus = httpStatus;
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\shared-kernel\src\main\java\com\rapidocourier\shared_kernel\exception\GlobalExceptionHandler.java ===
+package com.rapidocourier.shared_kernel.exception;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBaseException(BaseException ex) {
+        CodigoError error = ex.getCodigoError();
+        return ResponseEntity
+                .status(error.getHttpStatus())
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("No tiene permisos suficientes para realizar esta acciÃ³n"));
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, List<String>>>> handleValidationException(MethodArgumentNotValidException ex) {
+        Map<String, List<String>> erroresValidacion = ex.getBindingResult().getFieldErrors()
+                .stream()
+                .collect(Collectors.groupingBy(
+                        FieldError::getField,
+                        Collectors.mapping(FieldError::getDefaultMessage, Collectors.toList())
+                ));
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("Error de validaciÃ³n", erroresValidacion));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneralException(Exception ex) {
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Ha ocurrido un error inesperado en el servidor"));
+    }
+}

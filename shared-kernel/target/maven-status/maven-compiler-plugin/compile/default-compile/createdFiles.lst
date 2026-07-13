@@ -1,0 +1,12 @@
+com\rapidocourier\shared_kernel\event\NotificacionEvent$NotificacionEventBuilder.class
+com\rapidocourier\shared_kernel\SharedKernelApplication.class
+com\rapidocourier\shared_kernel\dto\response\ApiResponse$ErrorDetail.class
+com\rapidocourier\shared_kernel\event\NotificacionEvent.class
+com\rapidocourier\shared_kernel\exception\ErrorCode.class
+com\rapidocourier\shared_kernel\exception\CodigoError.class
+com\rapidocourier\shared_kernel\dto\response\PaginaResponse.class
+com\rapidocourier\shared_kernel\event\PaqueteRegistradoEvent$PaqueteRegistradoEventBuilder.class
+com\rapidocourier\shared_kernel\event\PaqueteRegistradoEvent.class
+com\rapidocourier\shared_kernel\exception\GlobalExceptionHandler.class
+com\rapidocourier\shared_kernel\exception\BaseException.class
+com\rapidocourier\shared_kernel\dto\response\ApiResponse.class

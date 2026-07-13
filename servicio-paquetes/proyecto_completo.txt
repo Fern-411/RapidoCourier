@@ -1,0 +1,779 @@
+﻿=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\ServicioPaquetesApplication.java ===
+package com.rapidocourier.servicio_paquetes;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.scheduling.annotation.EnableAsync;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+@EnableAsync
+@ComponentScan(basePackages = {
+		"com.rapidocourier.servicio_paquetes",
+		"com.rapidocourier.shared_kernel"
+})
+public class ServicioPaquetesApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ServicioPaquetesApplication.class, args);
+	}
+
+}
+
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\ClienteClient.java ===
+package com.rapidocourier.servicio_paquetes.client;
+
+import com.rapidocourier.servicio_paquetes.dto.response.ClienteResponse;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+import java.util.UUID;
+
+@FeignClient(name = "servicio-clientes")
+public interface ClienteClient {
+
+    @GetMapping("/api/v1/clientes/dni/{dni}")
+    ApiResponse<ClienteResponse> buscarPorDni(@PathVariable("dni") String dni);
+}
+
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\NotificacionesClient.java ===
+package com.rapidocourier.servicio_paquetes.client;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.util.UUID;
+
+@FeignClient(name = "servicio-notificaciones")
+public interface NotificacionesClient {
+    
+    // Anotado con @Async para fire-and-forget si Feign lo soporta (requiere proxy, normalmente se llama desde un servicio @Async)
+    @PostMapping("/api/v1/notificaciones/enviar")
+    ApiResponse<Void> enviarNotificacion(
+            @RequestParam("paqueteId") UUID paqueteId,
+            @RequestParam("mensaje") String mensaje);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\client\PagosClient.java ===
+package com.rapidocourier.servicio_paquetes.client;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
+import java.util.UUID;
+
+@FeignClient(name = "servicio-pagos")
+public interface PagosClient {
+    
+    @GetMapping("/api/v1/pagos/verificar/{paqueteId}")
+    ApiResponse<Boolean> verificarPagoCompletado(@PathVariable("paqueteId") UUID paqueteId);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\controller\PaqueteController.java ===
+package com.rapidocourier.servicio_paquetes.controller;
+
+import com.rapidocourier.servicio_paquetes.dto.request.PaqueteRequest;
+import com.rapidocourier.servicio_paquetes.dto.response.HistorialEstadoResponse;
+import com.rapidocourier.servicio_paquetes.dto.response.PaqueteResponse;
+import com.rapidocourier.servicio_paquetes.entity.EstadoPaquete;
+import com.rapidocourier.servicio_paquetes.service.PaqueteService;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.AllArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Controlador REST para la gestiÃ³n integral de paquetes.
+ * Proporciona endpoints para el registro, actualizaciÃ³n de estados,
+ * seguimiento y bÃºsqueda avanzada de envÃ­os en Rapido Courier.
+ */
+@RestController
+@AllArgsConstructor
+@RequestMapping("/api/v1/paquetes")
+@Tag(name = "Paquetes", description = "Endpoints para la gestiÃ³n, bÃºsqueda y seguimiento de paquetes")
+public class PaqueteController {
+
+    private final PaqueteService paqueteService;
+
+    @Operation(summary = "Registrar nuevo paquete", description = "Crea un paquete, genera su cÃ³digo de rastreo y calcula la tarifa base.")
+    @PostMapping
+    public ResponseEntity<ApiResponse<PaqueteResponse>> registrarPaquete(
+            @Valid @RequestBody PaqueteRequest request) {
+        PaqueteResponse response = paqueteService.registrarPaquete(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Paquete registrado", response));
+    }
+
+    @Operation(summary = "Actualizar estado", description = "Permite cambiar el estado de un paquete (ej. de REGISTRADO a EN_TRANSITO). Valida pagos si corresponde.")
+    @PutMapping("/{id}/estado")
+    public ResponseEntity<ApiResponse<PaqueteResponse>> actualizarEstado(
+            @Parameter(description = "UUID del paquete") @PathVariable UUID id,
+            @Parameter(description = "Nuevo estado a asignar") @RequestParam EstadoPaquete estado,
+            @Parameter(description = "Usuario que realiza la acciÃ³n", hidden = true) @RequestHeader(value = "X-User-Email", defaultValue = "SYSTEM") String usuario) {
+        PaqueteResponse response = paqueteService.actualizarEstado(id, estado, usuario);
+        return ResponseEntity.ok(ApiResponse.ok("Estado actualizado", response));
+    }
+
+    @Operation(summary = "Buscar paquetes con filtros", description = "Permite buscar paquetes combinando estado, sucursal o un rango de fechas.")
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPaquetes(
+            @Parameter(description = "Filtrar por estado actual") @RequestParam(required = false) EstadoPaquete estado,
+            @Parameter(description = "Filtrar por sucursal origen/destino") @RequestParam(required = false) String sucursal,
+            @Parameter(description = "Fecha inicial (ISO-8601)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaInicio,
+            @Parameter(description = "Fecha lÃ­mite (ISO-8601)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fechaFin) {
+        List<PaqueteResponse> response = paqueteService.buscar(estado, fechaInicio, fechaFin, sucursal);
+        return ResponseEntity.ok(ApiResponse.ok("Resultados de bÃºsqueda con filtros", response));
+    }
+
+    @Operation(summary = "BÃºsqueda por texto", description = "Busca paquetes cuyo cÃ³digo de rastreo contenga el texto proporcionado.")
+    @GetMapping("/busqueda")
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorTexto(
+            @Parameter(description = "Texto o fragmento a buscar") @RequestParam String texto) {
+        List<PaqueteResponse> response = paqueteService.buscarPorTextoParcial(texto);
+        return ResponseEntity.ok(ApiResponse.ok("Resultados bÃºsqueda de texto", response));
+    }
+
+    @Operation(summary = "Buscar por cÃ³digo de rastreo", description = "Obtiene los detalles de un paquete usando su cÃ³digo exacto generado por el sistema.")
+    @GetMapping("/rastreo/{codigoRastreo}")
+    public ResponseEntity<ApiResponse<PaqueteResponse>> buscarPorCodigoRastreo(
+            @Parameter(description = "CÃ³digo de rastreo del paquete") @PathVariable String codigoRastreo) {
+        PaqueteResponse response = paqueteService.buscarPorCodigoRastreo(codigoRastreo.toUpperCase());
+        return ResponseEntity.ok(ApiResponse.ok("Paquete encontrado", response));
+    }
+
+    @Operation(summary = "Historial por remitente", description = "Recupera todos los paquetes enviados por un cliente especÃ­fico.")
+    @GetMapping("/remitente/{remitenteId}")
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorRemitenteId(
+            @Parameter(description = "UUID del cliente remitente") @PathVariable UUID remitenteId) {
+        List<PaqueteResponse> response = paqueteService.buscarPorRemitenteId(remitenteId);
+        return ResponseEntity.ok(ApiResponse.ok("Historial de paquetes del remitente", response));
+    }
+
+    @Operation(summary = "Obtener historial de estados", description = "Devuelve la lÃ­nea de tiempo cronolÃ³gica con todos los estados por los que ha pasado el paquete.")
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<ApiResponse<List<com.rapidocourier.servicio_paquetes.entity.HistorialEstado>>> obtenerHistorial(
+            @Parameter(description = "UUID del paquete") @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok("Historial de estados del paquete", paqueteService.obtenerHistorial(id)));
+    }
+
+    @Operation(summary = "Agregar categorÃ­as", description = "AÃ±ade etiquetas de clasificaciÃ³n a un paquete existente.")
+    @PostMapping("/{id}/categorias")
+    public ResponseEntity<ApiResponse<PaqueteResponse>> agregarCategorias(
+            @Parameter(description = "UUID del paquete") @PathVariable UUID id,
+            @RequestBody List<String> categorias) {
+        PaqueteResponse response = paqueteService.agregarCategorias(id, categorias);
+        return ResponseEntity.ok(ApiResponse.ok("CategorÃ­as agregadas", response));
+    }
+
+    @Operation(summary = "Eliminar paquete", description = "Elimina fÃ­sicamente un paquete de la base de datos.")
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> eliminarPaquete(
+            @Parameter(description = "UUID del paquete") @PathVariable UUID id) {
+        paqueteService.eliminarPaquete(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Obtener historial de estados", description = "Devuelve la lÃ­nea de tiempo cronolÃ³gica con todos los estados por los que ha pasado el paquete.")
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<ApiResponse<List<HistorialEstadoResponse>>> obtenerHistorial(
+            @Parameter(description = "UUID del paquete") @PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.ok("Historial de estados del paquete", paqueteService.obtenerHistorial(id)));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\request\PaqueteRequest.java ===
+package com.rapidocourier.servicio_paquetes.dto.request;
+
+
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
+import java.util.Set;
+
+public record PaqueteRequest(
+    @NotBlank(message = "El DNI del remitente es obligatorio")
+    String dniRemitente,
+
+    @NotBlank(message = "El DNI del destinatario es obligatorio")
+    String dniDestinatario,
+
+    @NotNull(message = "El peso es obligatorio")
+    @Min(value = 0, message = "El peso debe ser mayor a 0")
+    BigDecimal pesoKg,
+
+    @NotNull(message = "El valor declarado es obligatorio")
+    @Min(value = 0, message = "El valor declarado debe ser mayor a 0")
+    BigDecimal valorDeclarado,
+
+    @NotBlank(message = "La sucursal de origen es obligatoria")
+    String sucursalOrigen,
+
+    @NotBlank(message = "La sucursal de destino es obligatoria")
+    String sucursalDestino,
+
+    @Size(min = 1, message = "Debe haber al menos una categoria")
+    Set<String> categorias
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\response\ClienteResponse.java ===
+package com.rapidocourier.servicio_paquetes.dto.response;
+
+import java.util.UUID;
+
+public record ClienteResponse(
+    UUID id,
+    String dni,
+    String nombreCompleto,
+    String email,
+    String telefono
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\response\HistorialEstadoResponse.java ===
+package com.rapidocourier.servicio_paquetes.dto.response;
+
+import com.rapidocourier.servicio_paquetes.entity.EstadoPaquete;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record HistorialEstadoResponse(
+        UUID id,
+        EstadoPaquete estado,
+        String usuarioResponsable,
+        LocalDateTime fechaCambio
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\dto\response\PaqueteResponse.java ===
+package com.rapidocourier.servicio_paquetes.dto.response;
+
+import com.rapidocourier.servicio_paquetes.entity.EstadoPaquete;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record PaqueteResponse(
+    UUID id,
+    String codigoRastreo,
+    BigDecimal tarifa,
+    EstadoPaquete estadoActual,
+    LocalDateTime fechaRegistro
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\Categoria.java ===
+package com.rapidocourier.servicio_paquetes.entity;
+
+import jakarta.persistence.*;
+import java.util.UUID;
+
+@Entity
+@Table(name = "categorias")
+public class Categoria {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, unique = true, length = 100)
+    private String nombre;
+
+    public Categoria() {}
+
+    public Categoria(String nombre) {
+        this.nombre = nombre;
+    }
+
+    public UUID getId() { return id; }
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\EstadoPaquete.java ===
+package com.rapidocourier.servicio_paquetes.entity;
+
+public enum EstadoPaquete {
+    REGISTRADO,
+    EN_TRANSITO,
+    EN_SUCURSAL_DESTINO,
+    ENTREGADO
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\HistorialEstado.java ===
+package com.rapidocourier.servicio_paquetes.entity;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "historial_estados")
+public class HistorialEstado {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "paquete_id", nullable = false)
+    private Paquete paquete;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private EstadoPaquete estado;
+
+    @Column(nullable = false, length = 150)
+    private String usuarioResponsable; // DNI o Email de quien cambia el estado
+
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime fechaCambio;
+
+    public HistorialEstado() {}
+
+    public HistorialEstado(Paquete paquete, EstadoPaquete estado, String usuarioResponsable) {
+        this.paquete = paquete;
+        this.estado = estado;
+        this.usuarioResponsable = usuarioResponsable;
+    }
+
+    public UUID getId() { return id; }
+    public Paquete getPaquete() { return paquete; }
+    public EstadoPaquete getEstado() { return estado; }
+    public String getUsuarioResponsable() { return usuarioResponsable; }
+    public LocalDateTime getFechaCambio() { return fechaCambio; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\entity\Paquete.java ===
+package com.rapidocourier.servicio_paquetes.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.UUID;
+
+@Entity
+@Table(name = "paquetes")
+@AllArgsConstructor
+@NoArgsConstructor // <-- SOLUCIÃ“N AL ERROR DE 13 ARGUMENTOS
+@Getter
+@Setter
+public class Paquete {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, unique = true, length = 50)
+    private String codigoRastreo;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal pesoKg;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal valorDeclarado;
+
+    @Column(nullable = false, precision = 10, scale = 2)
+    private BigDecimal tarifa;
+
+    @Column(nullable = false, length = 100)
+    private String sucursalOrigen;
+
+    @Column(nullable = false, length = 100)
+    private String sucursalDestino;
+
+    @Column(nullable = false)
+    private UUID remitenteId;
+
+    @Column(nullable = false)
+    private UUID destinatarioId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 50)
+    private EstadoPaquete estadoActual = EstadoPaquete.REGISTRADO;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "paquetes_categorias",
+            joinColumns = @JoinColumn(name = "paquete_id"),
+            inverseJoinColumns = @JoinColumn(name = "categoria_id")
+    )
+    private Set<Categoria> categorias = new HashSet<>();
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\exception\ErrorCode.java ===
+package com.rapidocourier.servicio_paquetes.exception;
+
+import com.rapidocourier.shared_kernel.exception.CodigoError;
+import org.springframework.http.HttpStatus;
+
+public enum ErrorCode implements CodigoError {
+
+    PAQUETE_NO_ENCONTRADO("PAQ_404", "El paquete solicitado no existe", HttpStatus.NOT_FOUND),
+    DNI_NO_REGISTRADO("PAQ_409_1", "El DNI no estÃ¡ registrado en el sistema", HttpStatus.CONFLICT),
+    TRANSICION_INVALIDA("PAQ_409_2", "TransiciÃ³n de estado no vÃ¡lida para este paquete", HttpStatus.CONFLICT),
+    PAGO_NO_COMPLETADO("PAQ_409_3", "El pago no ha sido completado para este paquete", HttpStatus.CONFLICT),
+    ERROR_COMUNICACION_CLIENTES("PAQ_502_1", "Error al comunicar con servicio-clientes", HttpStatus.BAD_GATEWAY),
+    ERROR_COMUNICACION_PAGOS("PAQ_502_2", "Error al comunicar con servicio-pagos", HttpStatus.BAD_GATEWAY);
+
+    private final String codigo;
+    private final String mensajeDefault;
+    private final HttpStatus httpStatus;
+
+    ErrorCode(String codigo, String mensajeDefault, HttpStatus httpStatus) {
+        this.codigo = codigo;
+        this.mensajeDefault = mensajeDefault;
+        this.httpStatus = httpStatus;
+    }
+
+    @Override public String getCodigo() { return codigo; }
+    @Override public String getMensajeDefault() { return mensajeDefault; }
+    @Override public HttpStatus getHttpStatus() { return httpStatus; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\exception\GlobalExceptionHandler.java ===
+package com.rapidocourier.servicio_paquetes.exception;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(BaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBase(BaseException ex) {
+        return ResponseEntity
+                .status(ex.getCodigoError().getHttpStatus())
+                .body(ApiResponse.error(ex.getCodigoError().getCodigo(), ex.getMessage()));
+    }
+
+    // CORRECCIÃ“N: La firma ahora acepta el Map genÃ©rico en lugar de Void
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, List<String>>>> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, List<String>> errores = ex.getBindingResult().getFieldErrors().stream()
+                .collect(Collectors.groupingBy(
+                        FieldError::getField,
+                        Collectors.mapping(FieldError::getDefaultMessage, Collectors.toList())
+                ));
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.errorValidacion("PAQ_400", "Error de validaciÃ³n en los campos proporcionados", errores));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("PAQ_500", "Ha ocurrido un error inesperado en el servidor"));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\repository\CategoriaRepository.java ===
+package com.rapidocourier.servicio_paquetes.repository;
+
+import com.rapidocourier.servicio_paquetes.entity.Categoria;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface CategoriaRepository extends JpaRepository<Categoria, UUID> {
+    Optional<Categoria> findByNombre(String nombre);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\repository\HistorialEstadoRepository.java ===
+package com.rapidocourier.servicio_paquetes.repository;
+
+import com.rapidocourier.servicio_paquetes.entity.HistorialEstado;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+import java.util.UUID;
+
+public interface HistorialEstadoRepository extends JpaRepository<HistorialEstado, UUID> {
+    List<HistorialEstado> findByPaqueteIdOrderByFechaCambioDesc(UUID paqueteId);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\repository\PaqueteRepository.java ===
+package com.rapidocourier.servicio_paquetes.repository;
+import com.rapidocourier.servicio_paquetes.entity.Paquete;
+import com.rapidocourier.servicio_paquetes.entity.EstadoPaquete;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+public interface PaqueteRepository extends JpaRepository<Paquete, UUID> {
+    Optional<Paquete> findByCodigoRastreo(String codigoRastreo);
+    List<Paquete> findByRemitenteId(UUID remitenteId);
+    // RF-06 Busqueda y filtros
+    @Query(value = "SELECT * FROM paquetes WHERE " +
+            "(:estado IS NULL OR estado_actual = :estado) AND " +
+            "(:fechaInicio IS NULL OR created_at >= cast(:fechaInicio as timestamp)) AND " +
+            "(:fechaFin IS NULL OR created_at <= cast(:fechaFin as timestamp)) AND " +
+            "(:sucursal IS NULL OR sucursal_origen = :sucursal OR sucursal_destino = :sucursal)", 
+            nativeQuery = true)
+    List<Paquete> buscarConFiltros(@Param("estado") String estado,
+                                   @Param("fechaInicio") LocalDateTime fechaInicio,
+                                   @Param("fechaFin") LocalDateTime fechaFin,
+                                   @Param("sucursal") String sucursal);
+
+    // RF-07 BÃºsqueda por texto parcial
+    @Query(value = "SELECT * FROM paquetes WHERE codigo_rastreo ILIKE '%' || :texto || '%'", nativeQuery = true)
+    List<Paquete> buscarPorTextoParcial(@Param("texto") String texto);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-paquetes\src\main\java\com\rapidocourier\servicio_paquetes\service\PaqueteService.java ===
+package com.rapidocourier.servicio_paquetes.service;
+
+import com.rapidocourier.servicio_paquetes.client.ClienteClient;
+import com.rapidocourier.servicio_paquetes.client.NotificacionesClient;
+import com.rapidocourier.servicio_paquetes.client.PagosClient;
+import com.rapidocourier.servicio_paquetes.dto.request.PaqueteRequest;
+import com.rapidocourier.servicio_paquetes.dto.response.ClienteResponse;
+import com.rapidocourier.servicio_paquetes.dto.response.HistorialEstadoResponse;
+import com.rapidocourier.servicio_paquetes.dto.response.PaqueteResponse;
+import com.rapidocourier.servicio_paquetes.entity.Categoria;
+import com.rapidocourier.servicio_paquetes.entity.EstadoPaquete;
+import com.rapidocourier.servicio_paquetes.entity.HistorialEstado;
+import com.rapidocourier.servicio_paquetes.entity.Paquete;
+import com.rapidocourier.servicio_paquetes.exception.ErrorCode;
+import com.rapidocourier.servicio_paquetes.repository.CategoriaRepository;
+import com.rapidocourier.servicio_paquetes.repository.HistorialEstadoRepository;
+import com.rapidocourier.servicio_paquetes.repository.PaqueteRepository;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import lombok.AllArgsConstructor;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@AllArgsConstructor
+public class PaqueteService {
+
+    private final PaqueteRepository paqueteRepository;
+    private final HistorialEstadoRepository historialEstadoRepository;
+    private final CategoriaRepository categoriaRepository;
+    private final ClienteClient clienteClient;
+    private final PagosClient pagosClient;
+    private final NotificacionesClient notificacionesClient;
+
+    @Transactional
+    public PaqueteResponse registrarPaquete(PaqueteRequest request) {
+        UUID remitenteId = validarDniYObtenerId(request.dniRemitente());
+        UUID destinatarioId = validarDniYObtenerId(request.dniDestinatario());
+
+        Set<Categoria> categorias = new HashSet<>();
+        for (String nombreCat : request.categorias()) {
+            Categoria cat = categoriaRepository.findByNombre(nombreCat)
+                    .orElseGet(() -> categoriaRepository.save(new Categoria(nombreCat)));
+            categorias.add(cat);
+        }
+
+        BigDecimal tarifa = calcularTarifa(request.pesoKg(), request.valorDeclarado());
+
+        Paquete paquete = new Paquete();
+        paquete.setCodigoRastreo(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        paquete.setPesoKg(request.pesoKg());
+        paquete.setValorDeclarado(request.valorDeclarado());
+        paquete.setTarifa(tarifa);
+        paquete.setSucursalOrigen(request.sucursalOrigen());
+        paquete.setSucursalDestino(request.sucursalDestino());
+        paquete.setRemitenteId(remitenteId);
+        paquete.setDestinatarioId(destinatarioId);
+        paquete.setCategorias(categorias);
+        paquete.setEstadoActual(EstadoPaquete.REGISTRADO);
+
+        Paquete guardado = paqueteRepository.save(paquete);
+
+        HistorialEstado historial = new HistorialEstado(guardado, EstadoPaquete.REGISTRADO, "SISTEMA");
+        historialEstadoRepository.save(historial);
+
+        notificarCambioEstado(guardado.getId(), "Paquete registrado con codigo: " + guardado.getCodigoRastreo());
+
+        return new PaqueteResponse(guardado.getId(), guardado.getCodigoRastreo(), guardado.getTarifa(), guardado.getEstadoActual(), guardado.getCreatedAt());
+    }
+
+    // --- CIRCUIT BREAKER APLICADO (Puntos de rÃºbrica) ---
+    @CircuitBreaker(name = "clientesCB", fallbackMethod = "fallbackValidarDni")
+    private UUID validarDniYObtenerId(String dni) {
+        ApiResponse<ClienteResponse> response = clienteClient.buscarPorDni(dni);
+        if (response != null && response.success() && response.data() != null) {
+            return response.data().id();
+        }
+        throw new BaseException(ErrorCode.DNI_NO_REGISTRADO);
+    }
+
+    private UUID fallbackValidarDni(String dni, Throwable t) {
+        throw new BaseException(ErrorCode.ERROR_COMUNICACION_CLIENTES);
+    }
+
+    private BigDecimal calcularTarifa(BigDecimal pesoKg, BigDecimal valorDeclarado) {
+        BigDecimal tarifaBase = new BigDecimal("10.00");
+        BigDecimal costoPeso = pesoKg.multiply(new BigDecimal("5.00"));
+        BigDecimal seguro = BigDecimal.ZERO;
+        if (valorDeclarado.compareTo(new BigDecimal("100.00")) > 0) {
+            seguro = valorDeclarado.multiply(new BigDecimal("0.02"));
+        }
+        return tarifaBase.add(costoPeso).add(seguro);
+    }
+
+    @Transactional
+    public PaqueteResponse actualizarEstado(UUID paqueteId, EstadoPaquete nuevoEstado, String usuario) {
+        Paquete paquete = paqueteRepository.findById(paqueteId)
+                .orElseThrow(() -> new BaseException(ErrorCode.PAQUETE_NO_ENCONTRADO));
+
+        validarTransicionEstado(paquete.getEstadoActual(), nuevoEstado);
+
+        if (nuevoEstado == EstadoPaquete.EN_TRANSITO) {
+            validarPago(paqueteId);
+        }
+
+        paquete.setEstadoActual(nuevoEstado);
+        paqueteRepository.save(paquete);
+
+        HistorialEstado historial = new HistorialEstado(paquete, nuevoEstado, usuario);
+        historialEstadoRepository.save(historial);
+
+        notificarCambioEstado(paqueteId, "El paquete ahora esta en estado: " + nuevoEstado);
+
+        return new PaqueteResponse(paquete.getId(), paquete.getCodigoRastreo(), paquete.getTarifa(), paquete.getEstadoActual(), paquete.getCreatedAt());
+    }
+
+    private void validarTransicionEstado(EstadoPaquete actual, EstadoPaquete nuevo) {
+        boolean valido = false;
+        if (actual == EstadoPaquete.REGISTRADO && nuevo == EstadoPaquete.EN_TRANSITO) valido = true;
+        if (actual == EstadoPaquete.EN_TRANSITO && nuevo == EstadoPaquete.EN_SUCURSAL_DESTINO) valido = true;
+        if (actual == EstadoPaquete.EN_SUCURSAL_DESTINO && nuevo == EstadoPaquete.ENTREGADO) valido = true;
+
+        if (!valido) {
+            throw new BaseException(ErrorCode.TRANSICION_INVALIDA);
+        }
+    }
+
+    private void validarPago(UUID paqueteId) {
+        try {
+            ApiResponse<Boolean> response = pagosClient.verificarPagoCompletado(paqueteId);
+            if (response == null || !response.success() || Boolean.FALSE.equals(response.data())) {
+                throw new BaseException(ErrorCode.PAGO_NO_COMPLETADO);
+            }
+        } catch (BaseException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BaseException(ErrorCode.ERROR_COMUNICACION_PAGOS);
+        }
+    }
+
+    @Async
+    public void notificarCambioEstado(UUID paqueteId, String mensaje) {
+        try {
+            notificacionesClient.enviarNotificacion(paqueteId, mensaje);
+        } catch (Exception e) {
+            System.err.println("Fallo al enviar notificacion asincrona: " + e.getMessage());
+        }
+    }
+
+    public List<PaqueteResponse> buscar(EstadoPaquete estado, LocalDateTime inicio, LocalDateTime fin, String sucursal) {
+        String estadoStr = estado != null ? estado.name() : null;
+        return paqueteRepository.buscarConFiltros(estadoStr, inicio, fin, sucursal).stream()
+                .map(p -> new PaqueteResponse(p.getId(), p.getCodigoRastreo(), p.getTarifa(), p.getEstadoActual(), p.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    public List<PaqueteResponse> buscarPorTextoParcial(String texto) {
+        return paqueteRepository.buscarPorTextoParcial(texto).stream()
+                .map(p -> new PaqueteResponse(p.getId(), p.getCodigoRastreo(), p.getTarifa(), p.getEstadoActual(), p.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    public List<PaqueteResponse> buscarPorRemitenteId(UUID remitenteId) {
+        return paqueteRepository.findByRemitenteId(remitenteId).stream()
+                .map(p -> new PaqueteResponse(p.getId(), p.getCodigoRastreo(), p.getTarifa(), p.getEstadoActual(), p.getCreatedAt()))
+                .collect(Collectors.toList());
+    }
+
+    // --- CORRECCIÃ“N MAPEO HISTORIAL (Evita fuga de entidades) ---
+    public List<HistorialEstadoResponse> obtenerHistorial(UUID paqueteId) {
+        paqueteRepository.findById(paqueteId)
+                .orElseThrow(() -> new BaseException(ErrorCode.PAQUETE_NO_ENCONTRADO));
+
+        return historialEstadoRepository.findByPaqueteIdOrderByFechaCambioDesc(paqueteId).stream()
+                .map(h -> new HistorialEstadoResponse(
+                        h.getId(),
+                        h.getEstado(),
+                        h.getUsuarioResponsable(),
+                        h.getFechaCambio()
+                ))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional
+    public PaqueteResponse agregarCategorias(UUID paqueteId, List<String> nuevasCategorias) {
+        Paquete paquete = paqueteRepository.findById(paqueteId)
+                .orElseThrow(() -> new BaseException(ErrorCode.PAQUETE_NO_ENCONTRADO));
+
+        for (String nombreCat : nuevasCategorias) {
+            Categoria cat = categoriaRepository.findByNombre(nombreCat)
+                    .orElseGet(() -> categoriaRepository.save(new Categoria(nombreCat)));
+            paquete.getCategorias().add(cat);
+        }
+
+        paqueteRepository.save(paquete);
+        return new PaqueteResponse(paquete.getId(), paquete.getCodigoRastreo(), paquete.getTarifa(), paquete.getEstadoActual(), paquete.getCreatedAt());
+    }
+
+    @Transactional
+    public PaqueteResponse buscarPorCodigoRastreo(String codigoRastreo) {
+        Paquete paquete = paqueteRepository.findByCodigoRastreo(codigoRastreo)
+                .orElseThrow(() -> new BaseException(ErrorCode.PAQUETE_NO_ENCONTRADO));
+
+        return new PaqueteResponse(paquete.getId(), paquete.getCodigoRastreo(), paquete.getTarifa(), paquete.getEstadoActual(), paquete.getCreatedAt());
+    }
+
+    @Transactional
+    public void eliminarPaquete(UUID paqueteId) {
+        Paquete paquete = paqueteRepository.findById(paqueteId)
+                .orElseThrow(() -> new BaseException(ErrorCode.PAQUETE_NO_ENCONTRADO));
+        paqueteRepository.delete(paquete);
+    }
+}
