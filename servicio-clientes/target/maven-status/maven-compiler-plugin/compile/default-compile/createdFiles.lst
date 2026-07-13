@@ -1,0 +1,12 @@
+com\rapidocourier\servicio_clientes\client\ReniecClient.class
+com\rapidocourier\servicio_clientes\entity\Cliente.class
+com\rapidocourier\servicio_clientes\ServicioClientesApplication.class
+com\rapidocourier\servicio_clientes\dto\request\ClienteRequest.class
+com\rapidocourier\servicio_clientes\exception\ErrorCode.class
+com\rapidocourier\servicio_clientes\config\RabbitMQConfig.class
+com\rapidocourier\servicio_clientes\dto\response\ReniecResponse.class
+com\rapidocourier\servicio_clientes\service\ClienteService.class
+com\rapidocourier\servicio_clientes\dto\request\ClienteUpdateRequest.class
+com\rapidocourier\servicio_clientes\repository\ClienteRepository.class
+com\rapidocourier\servicio_clientes\dto\response\ClienteResponse.class
+com\rapidocourier\servicio_clientes\controller\ClienteController.class

@@ -1,0 +1,62 @@
+# === application.yaml ===
+server:
+  port: 8081
+
+spring:
+  application:
+    name: servicio-clientes
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL}"
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/db_clientes}
+    username: ${DB_USERNAME:rapidouser}
+    password: ${DB_PASSWORD:rapidopass}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    baseline-on-migrate: false
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+# ── Configuración de Eureka (RNF-08) ──
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+
+# ── Configuración de la API Externa RENIEC (RF-01) ──
+reniec:
+  api:
+    url: ${RENIEC_API_URL:https://api.decolecta.com/v1/reniec/dni}
+    token: ${RENIEC_API_TOKEN}
+
+# ── Configuración de Resiliencia (Sección 15 del Examen) ──
+resilience4j:
+  circuitbreaker:
+    instances:
+      reniecCB:
+        minimumNumberOfCalls: 1
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        slidingWindowSize: 5
+        slidingWindowType: COUNT_BASED
+
+# ── Endpoints de Actuator ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,refresh,circuitbreakers
+
+logging:
+  level:
+    com.rapidocourier: DEBUG
+

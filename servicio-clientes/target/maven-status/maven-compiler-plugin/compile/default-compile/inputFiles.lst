@@ -1,0 +1,12 @@
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\client\ReniecClient.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\config\RabbitMQConfig.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\controller\ClienteController.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\request\ClienteRequest.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\request\ClienteUpdateRequest.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\response\ClienteResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\response\ReniecResponse.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\entity\Cliente.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\exception\ErrorCode.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\repository\ClienteRepository.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\service\ClienteService.java
+D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\ServicioClientesApplication.java

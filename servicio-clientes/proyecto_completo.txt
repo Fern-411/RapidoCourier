@@ -1,0 +1,376 @@
+﻿=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\ServicioClientesApplication.java ===
+package com.rapidocourier.servicio_clientes;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.context.annotation.ComponentScan;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+@ComponentScan(basePackages = {
+		"com.rapidocourier.servicio_clientes",
+		"com.rapidocourier.shared_kernel"
+})
+public class ServicioClientesApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ServicioClientesApplication.class, args);
+	}
+
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\client\ReniecClient.java ===
+package com.rapidocourier.servicio_clientes.client;
+
+import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+
+@FeignClient(name = "reniec-api", url = "${reniec.api.url}")
+public interface ReniecClient {
+    
+    @GetMapping("/{dni}")
+    String getNombreCompleto(@PathVariable("dni") String dni, @RequestHeader("Authorization") String token);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\controller\ClienteController.java ===
+package com.rapidocourier.servicio_clientes.controller;
+
+import com.rapidocourier.servicio_clientes.dto.request.ClienteRequest;
+import com.rapidocourier.servicio_clientes.dto.response.ClienteResponse;
+import com.rapidocourier.servicio_clientes.service.ClienteService;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequiredArgsConstructor
+@RequestMapping("/api/v1/clientes")
+public class ClienteController {
+
+    private final ClienteService clienteService;
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<ClienteResponse>> registrarCliente(@Valid @RequestBody ClienteRequest request) {
+        ClienteResponse response = clienteService.registrarCliente(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.ok("Cliente registrado", response));
+    }
+
+    @GetMapping("/dni/{dni}")
+    public ResponseEntity<ApiResponse<ClienteResponse>> getClienteByDni(@PathVariable String dni) {
+        ClienteResponse response = clienteService.buscarPorDni(dni);
+        return ResponseEntity.ok(ApiResponse.ok("Cliente encontrado", response));
+    }
+
+    @GetMapping("/email/{email}")
+    public ResponseEntity<ApiResponse<ClienteResponse>> getClienteByEmail(@PathVariable String email) {
+        ClienteResponse response = clienteService.buscarPorEmail(email);
+        return ResponseEntity.ok(ApiResponse.ok("Cliente encontrado", response));
+    }
+}
+
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\request\ClienteRequest.java ===
+package com.rapidocourier.servicio_clientes.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+
+public record ClienteRequest(
+    @NotBlank(message = "El DNI no puede estar vacio")
+    @Pattern(regexp = "\\d{8}", message = "El DNI debe tener 8 digitos")
+    String dni,
+
+    @NotBlank(message = "El email no puede estar vacio")
+    @Email(message = "Formato de email invalido")
+    String email,
+
+    @Size(max = 20, message = "El telefono no debe exceder los 20 caracteres")
+    String telefono
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\response\ClienteResponse.java ===
+package com.rapidocourier.servicio_clientes.dto.response;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record ClienteResponse(
+        UUID id,
+        String dni,
+        String nombreCompleto,
+        String email,
+        String telefono,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\dto\response\ReniecResponse.java ===
+package com.rapidocourier.servicio_clientes.dto.response;
+
+public record ReniecResponse(
+    boolean success,
+    String data // Asumiendo que el nombre completo viene en 'data' segun la API
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\entity\Cliente.java ===
+package com.rapidocourier.servicio_clientes.entity;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "clientes")
+public class Cliente {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, unique = true, length = 8)
+    private String dni;
+
+    @Column(nullable = false, length = 150)
+    private String nombreCompleto;
+
+    @Column(nullable = false, unique = true, length = 150)
+    private String email;
+
+    @Column(length = 20)
+    private String telefono;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    public Cliente() {}
+
+    public UUID getId() { return id; }
+    public String getDni() { return dni; }
+    public void setDni(String dni) { this.dni = dni; }
+    public String getNombreCompleto() { return nombreCompleto; }
+    public void setNombreCompleto(String nombreCompleto) { this.nombreCompleto = nombreCompleto; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\exception\ErrorCode.java ===
+package com.rapidocourier.servicio_clientes.exception;
+
+import com.rapidocourier.shared_kernel.exception.CodigoError;
+import org.springframework.http.HttpStatus;
+
+public enum ErrorCode implements CodigoError {
+
+    CLIENTE_NO_ENCONTRADO("CLI_404", "El cliente solicitado no existe", HttpStatus.NOT_FOUND),
+    EMAIL_YA_REGISTRADO("CLI_409_1", "El email ya estÃ¡ registrado", HttpStatus.CONFLICT),
+    DNI_YA_REGISTRADO("CLI_409_2", "El DNI ya estÃ¡ registrado", HttpStatus.CONFLICT),
+    RENIEC_RESPUESTA_VACIA("CLI_502_1", "Respuesta vacÃ­a del servicio RENIEC", HttpStatus.BAD_GATEWAY),
+    RENIEC_FALLO_COMUNICACION("CLI_502_2", "Fallo al comunicar con RENIEC", HttpStatus.BAD_GATEWAY),
+    RENIEC_NO_DISPONIBLE("CLI_503", "Servicio RENIEC no disponible. Intente mÃ¡s tarde.", HttpStatus.SERVICE_UNAVAILABLE);
+
+    private final String codigo;
+    private final String mensajeDefault;
+    private final HttpStatus httpStatus;
+
+    ErrorCode(String codigo, String mensajeDefault, HttpStatus httpStatus) {
+        this.codigo = codigo;
+        this.mensajeDefault = mensajeDefault;
+        this.httpStatus = httpStatus;
+    }
+
+    @Override
+    public String getCodigo() { return codigo; }
+
+    @Override
+    public String getMensajeDefault() { return mensajeDefault; }
+
+    @Override
+    public HttpStatus getHttpStatus() { return httpStatus; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\exception\GlobalExceptionHandler.java ===
+package com.rapidocourier.servicio_clientes.exception;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    // â”€â”€ 1. MANEJO DINÃMICO DE REGLAS DE NEGOCIO (Usando el Shared Kernel) â”€â”€
+    @ExceptionHandler(BaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBase(BaseException ex) {
+        return ResponseEntity
+                .status(ex.getCodigoError().getHttpStatus())
+                // Utilizamos el nuevo formato de ApiResponse con (cÃ³digo, mensaje)
+                .body(ApiResponse.error(ex.getCodigoError().getCodigo(), ex.getMessage()));
+    }
+
+    // â”€â”€ 2. MANEJO DE ERRORES DE VALIDACIÃ“N (@Valid en los DTOs) â”€â”€
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, List<String>>>> handleValidation(MethodArgumentNotValidException ex) {
+        Map<String, List<String>> errores = ex.getBindingResult().getFieldErrors().stream()
+                .collect(Collectors.groupingBy(
+                        FieldError::getField,
+                        Collectors.mapping(FieldError::getDefaultMessage, Collectors.toList())
+                ));
+
+        // Utilizamos el formato de ApiResponse con (mensaje, data)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("Error de validaciÃ³n en los campos proporcionados", errores));
+    }
+
+    // â”€â”€ 3. MANEJO DE ERRORES INESPERADOS DEL SERVIDOR â”€â”€
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
+        // Registramos el cÃ³digo genÃ©rico 500 para el servicio de clientes
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("CLI_500", "Ha ocurrido un error inesperado en el servidor"));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\repository\ClienteRepository.java ===
+package com.rapidocourier.servicio_clientes.repository;
+
+import com.rapidocourier.servicio_clientes.entity.Cliente;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface ClienteRepository extends JpaRepository<Cliente, UUID> {
+    Optional<Cliente> findByEmail(String email);
+    Optional<Cliente> findByDni(String dni);
+    boolean existsByEmail(String email);
+    boolean existsByDni(String dni);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-clientes\src\main\java\com\rapidocourier\servicio_clientes\service\ClienteService.java ===
+package com.rapidocourier.servicio_clientes.service;
+
+import com.rapidocourier.servicio_clientes.client.ReniecClient;
+import com.rapidocourier.servicio_clientes.dto.request.ClienteRequest;
+import com.rapidocourier.servicio_clientes.dto.response.ClienteResponse;
+import com.rapidocourier.servicio_clientes.entity.Cliente;
+import com.rapidocourier.servicio_clientes.exception.ErrorCode;
+import com.rapidocourier.servicio_clientes.repository.ClienteRepository;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class ClienteService {
+
+    private final ClienteRepository clienteRepository;
+    private final ReniecClient reniecClient;
+
+    @Value("${reniec.api.token}")
+    private String reniecToken;
+
+    @Autowired
+    @Lazy
+    private ClienteService self;
+
+    public ClienteResponse registrarCliente(ClienteRequest request) {
+        if (clienteRepository.existsByEmail(request.email())) {
+            throw new BaseException(ErrorCode.EMAIL_YA_REGISTRADO);
+        }
+        if (clienteRepository.existsByDni(request.dni())) {
+            throw new BaseException(ErrorCode.DNI_YA_REGISTRADO);
+        }
+
+        String nombreCompleto = self.obtenerNombreReniec(request.dni());
+
+        Cliente cliente = new Cliente();
+        cliente.setDni(request.dni());
+        cliente.setEmail(request.email());
+        cliente.setTelefono(request.telefono());
+        cliente.setNombreCompleto(nombreCompleto);
+
+        // Al hacer save(), Hibernate genera y asigna automÃ¡ticamente el createdAt y updatedAt
+        Cliente guardado = clienteRepository.save(cliente);
+
+        return new ClienteResponse(
+                guardado.getId(),
+                guardado.getDni(),
+                guardado.getNombreCompleto(),
+                guardado.getEmail(),
+                guardado.getTelefono(),
+                guardado.getCreatedAt(),
+                guardado.getUpdatedAt()
+        );
+    }
+
+    public ClienteResponse buscarPorDni(String dni) {
+        Cliente cliente = clienteRepository.findByDni(dni)
+                .orElseThrow(() -> new BaseException(ErrorCode.CLIENTE_NO_ENCONTRADO));
+
+        return new ClienteResponse(
+                cliente.getId(),
+                cliente.getDni(),
+                cliente.getNombreCompleto(),
+                cliente.getEmail(),
+                cliente.getTelefono(),
+                cliente.getCreatedAt(),
+                cliente.getUpdatedAt()
+        );
+    }
+
+    public ClienteResponse buscarPorEmail(String email) {
+        Cliente cliente = clienteRepository.findByEmail(email)
+                .orElseThrow(() -> new BaseException(ErrorCode.CLIENTE_NO_ENCONTRADO));
+
+        return new ClienteResponse(
+                cliente.getId(),
+                cliente.getDni(),
+                cliente.getNombreCompleto(),
+                cliente.getEmail(),
+                cliente.getTelefono(),
+                cliente.getCreatedAt(),
+                cliente.getUpdatedAt()
+        );
+    }
+
+    @CircuitBreaker(name = "reniecCB", fallbackMethod = "reniecFallback")
+    public String obtenerNombreReniec(String dni) {
+        try {
+            String response = reniecClient.getNombreCompleto(dni, "Bearer " + reniecToken);
+            if (response == null || response.isEmpty()) {
+                throw new BaseException(ErrorCode.RENIEC_RESPUESTA_VACIA);
+            }
+            return "Nombre Obtenido de API para " + dni;
+        } catch (BaseException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BaseException(ErrorCode.RENIEC_FALLO_COMUNICACION);
+        }
+    }
+
+    public String reniecFallback(String dni, Throwable t) {
+        throw new BaseException(ErrorCode.RENIEC_NO_DISPONIBLE);
+    }
+}

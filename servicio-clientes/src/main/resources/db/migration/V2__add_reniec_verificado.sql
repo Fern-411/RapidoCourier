@@ -1,0 +1,1 @@
+ALTER TABLE clientes ADD COLUMN reniec_verificado BOOLEAN DEFAULT FALSE;
