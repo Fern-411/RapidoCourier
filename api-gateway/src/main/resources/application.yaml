@@ -1,0 +1,153 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL}"
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        # ── Auth Service (Login y OTP) ───────────────────────
+        - id: servicio-auth-critico
+          uri: lb://SERVICIO-AUTH
+          predicates:
+            - Path=/api/v1/auth/login, /api/v1/auth/otp/send
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 5
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Auth Service (Estable - 90%) ───────────────────────────
+        - id: servicio-auth-v1
+          uri: lb://SERVICIO-AUTH
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/usuarios/**, /api/v1/admin/usuarios/**
+            - Weight=auth-group, 90
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Auth Service (Canary - 10%) ────────────────────────────
+        - id: servicio-auth-v2
+          uri: lb://SERVICIO-AUTH-V2
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/usuarios/**, /api/v1/admin/usuarios/**
+            - Weight=auth-group, 10
+          filters:
+            - StripPrefix=0
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Clientes Service ─────────────────────────────────
+        - id: servicio-clientes
+          uri: lb://SERVICIO-CLIENTES
+          predicates:
+            - Path=/api/v1/clientes/**
+          filters:
+            - StripPrefix=0
+            - AddRequestHeader=X-Internal-Source, api-gateway
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Paquetes Service ─────────────────────────────────
+        - id: servicio-paquetes
+          uri: lb://SERVICIO-PAQUETES
+          predicates:
+            - Path=/api/v1/paquetes/**, /api/v1/categorias/**
+          filters:
+            - StripPrefix=0
+            - AddRequestHeader=X-Internal-Source, api-gateway
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Pagos Service ─────────────────────────────────
+        - id: servicio-pagos
+          uri: lb://SERVICIO-PAGOS
+          predicates:
+            - Path=/api/v1/pagos/**
+          filters:
+            - StripPrefix=0
+            - AddRequestHeader=X-Internal-Source, api-gateway
+
+        # ── Envios Service ─────────────────────────────────
+        - id: servicio-envios
+          uri: lb://SERVICIO-ENVIOS
+          predicates:
+            - Path=/api/v1/envios/**, /api/v1/agencias/**
+          filters:
+            - StripPrefix=0
+            - AddRequestHeader=X-Internal-Source, api-gateway
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@principalNameKeyResolver}"
+
+        # ── Notificaciones Service (Conexión Directa) ────────
+        - id: servicio-notificaciones
+          uri: lb://SERVICIO-NOTIFICACIONES
+          predicates:
+            - Path=/api/v1/notificaciones/**
+          filters:
+            - StripPrefix=0
+            - AddRequestHeader=X-Internal-Source, api-gateway
+
+        # ── Actuator endpoints ────────────────
+        - id: actuator-paquetes
+          uri: lb://SERVICIO-PAQUETES
+          predicates:
+            - Path=/api/v1/admin/actuator/**
+            - Method=POST,GET
+          filters:
+            - RewritePath=/api/v1/admin/actuator/(?<segment>.*), /actuator/${segment}
+
+jwt:
+  secret: ${JWT_SECRET}
+
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.rapidocourier: DEBUG
