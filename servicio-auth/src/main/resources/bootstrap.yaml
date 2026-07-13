@@ -1,0 +1,14 @@
+# === bootstrap.yaml ===
+spring:
+  application:
+    name: servicio-auth
+  cloud:
+    vault:
+      host: localhost
+      port: 8200
+      scheme: http
+      token: root
+      kv:
+        enabled: true
+        backend: secret
+        default-context: rapidocourier/auth

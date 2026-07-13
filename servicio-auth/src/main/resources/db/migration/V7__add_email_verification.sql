@@ -1,0 +1,2 @@
+ALTER TABLE usuarios ADD COLUMN is_verified BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE usuarios ALTER COLUMN codigo_verificacion TYPE VARCHAR(255);

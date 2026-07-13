@@ -1,0 +1,3 @@
+ALTER TABLE refresh_tokens 
+ADD COLUMN IF NOT EXISTS ip_address VARCHAR(50),
+ADD COLUMN IF NOT EXISTS user_agent VARCHAR(500);

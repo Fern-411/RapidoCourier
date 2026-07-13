@@ -1,0 +1,586 @@
+﻿=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\ServicioAuthApplication.java ===
+package com.rapidocourier.servicio_auth;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.context.annotation.ComponentScan;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+// AÃ±ade esto para que Spring encuentre las clases del shared-kernel
+@ComponentScan(basePackages = {
+		"com.rapidocourier.servicio_auth",
+		"com.rapidocourier.shared_kernel"
+})
+public class ServicioAuthApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ServicioAuthApplication.class, args);
+	}
+
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\config\DataInitializer.java ===
+package com.rapidocourier.servicio_auth.config;
+
+import com.rapidocourier.servicio_auth.entity.Rol;
+import com.rapidocourier.servicio_auth.entity.Usuario;
+import com.rapidocourier.servicio_auth.repository.RolRepository;
+import com.rapidocourier.servicio_auth.repository.UsuarioRepository;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+@Component
+public class DataInitializer implements CommandLineRunner {
+
+    private final RolRepository rolRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final PasswordEncoder passwordEncoder;
+
+    public DataInitializer(RolRepository rolRepository, UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
+        this.rolRepository = rolRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.passwordEncoder = passwordEncoder;
+    }
+
+    @Override
+    @Transactional
+    public void run(String... args) throws Exception {
+        // Inicializar Roles
+        Rol rolAdmin = crearRolSiNoExiste("ADMIN");
+        crearRolSiNoExiste("EMPLEADO");
+        crearRolSiNoExiste("CLIENTE");
+
+        // Inicializar Usuario Administrador Maestro
+        String adminEmail = "admin@rapidocourier.com";
+        if (usuarioRepository.findByEmail(adminEmail).isEmpty()) {
+            Usuario admin = new Usuario();
+            admin.setNombre("Administrador Maestro");
+            admin.setEmail(adminEmail);
+            admin.setPassword(passwordEncoder.encode("admin123")); // Clave por defecto segura
+            admin.setRol(rolAdmin);
+            usuarioRepository.save(admin);
+            System.out.println("Usuario Administrador Maestro creado exitosamente.");
+        }
+
+        // Inicializar Operador
+        Rol rolOperador = rolRepository.findByNombre("EMPLEADO").orElseGet(() -> rolRepository.save(new Rol("EMPLEADO")));
+        String operadorEmail = "operador@rapidocourier.com";
+        if (usuarioRepository.findByEmail(operadorEmail).isEmpty()) {
+            Usuario operador = new Usuario();
+            operador.setNombre("Operador Logistico");
+            operador.setEmail(operadorEmail);
+            operador.setPassword(passwordEncoder.encode("operador123"));
+            operador.setRol(rolOperador);
+            usuarioRepository.save(operador);
+            System.out.println("Usuario Operador creado exitosamente.");
+        }
+
+        // Inicializar Cliente
+        Rol rolCliente = rolRepository.findByNombre("CLIENTE").orElseGet(() -> rolRepository.save(new Rol("CLIENTE")));
+        String clienteEmail = "cliente@rapidocourier.com";
+        if (usuarioRepository.findByEmail(clienteEmail).isEmpty()) {
+            Usuario cliente = new Usuario();
+            cliente.setNombre("Cliente Frecuente");
+            cliente.setEmail(clienteEmail);
+            cliente.setPassword(passwordEncoder.encode("cliente123"));
+            cliente.setRol(rolCliente);
+            usuarioRepository.save(cliente);
+            System.out.println("Usuario Cliente creado exitosamente.");
+        }
+    }
+
+    private Rol crearRolSiNoExiste(String nombre) {
+        return rolRepository.findByNombre(nombre)
+                .orElseGet(() -> rolRepository.save(new Rol(nombre)));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\controller\AuthController.java ===
+package com.rapidocourier.servicio_auth.controller;
+
+import com.rapidocourier.servicio_auth.dto.request.LoginRequest;
+import com.rapidocourier.servicio_auth.dto.request.RegisterRequest;
+import com.rapidocourier.servicio_auth.dto.response.AuthResponse;
+import com.rapidocourier.servicio_auth.service.AuthService;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import jakarta.validation.Valid;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/v1/auth")
+public class AuthController {
+
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
+        AuthResponse response = authService.login(request);
+        return ResponseEntity.ok(ApiResponse.ok("Login exitoso", response));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<ApiResponse<AuthResponse>> register(
+            @Valid @RequestBody RegisterRequest request,
+            @RequestHeader(value = "X-User-Role", required = false) String executorRole) {
+        AuthResponse response = authService.register(request, executorRole);
+        return ResponseEntity.ok(ApiResponse.ok("Usuario registrado exitosamente", response));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\dto\request\LoginRequest.java ===
+package com.rapidocourier.servicio_auth.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record LoginRequest(
+    @NotBlank(message = "El email es obligatorio")
+    @Email(message = "Debe ser un email valido")
+    String email,
+
+    @NotBlank(message = "La contraseÃ±a es obligatoria")
+    String password
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\dto\request\RegisterRequest.java ===
+package com.rapidocourier.servicio_auth.dto.request;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record RegisterRequest(
+    @NotBlank(message = "El nombre es obligatorio")
+    String nombre,
+
+    @NotBlank(message = "El email es obligatorio")
+    @Email(message = "Debe ser un email valido")
+    String email,
+
+    @NotBlank(message = "La contraseÃ±a es obligatoria")
+    String password,
+
+    @NotBlank(message = "El rol es obligatorio")
+    String rol
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\dto\response\AuthResponse.java ===
+package com.rapidocourier.servicio_auth.dto.response;
+
+public record AuthResponse(
+    String token,
+    String email,
+    String rol
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\entity\Rol.java ===
+package com.rapidocourier.servicio_auth.entity;
+
+
+import jakarta.persistence.*;
+
+import java.util.UUID;
+
+@Entity
+@Table(name = "roles")
+public class Rol {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, unique = true, length = 50)
+    private String nombre;
+
+    public Rol() {}
+
+    public Rol(String nombre) { this.nombre = nombre; }
+
+    public UUID getId() { return id; }
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\entity\Usuario.java ===
+package com.rapidocourier.servicio_auth.entity;
+
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "usuarios")
+public class Usuario {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false, length = 150)
+    private String nombre;
+
+    @Column(nullable = false, unique = true, length = 150)
+    private String email;
+
+    @Column(nullable = false)
+    private String password;
+
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "rol_id", nullable = false)
+    private Rol rol;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    public Usuario() {}
+
+    public UUID getId() { return id; }
+    public String getNombre() { return nombre; }
+    public void setNombre(String nombre) { this.nombre = nombre; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public Rol getRol() { return rol; }
+    public void setRol(Rol rol) { this.rol = rol; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\exception\ErrorCode.java ===
+package com.rapidocourier.servicio_auth.exception;
+
+import com.rapidocourier.shared_kernel.exception.CodigoError;
+import lombok.Getter;
+import org.springframework.http.HttpStatus;
+
+@Getter
+public enum ErrorCode implements CodigoError {
+
+    // â”€â”€ AutenticaciÃ³n y Registro â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    CORREO_YA_EXISTE("AUTH_001", "El correo electrÃ³nico ya estÃ¡ registrado", HttpStatus.CONFLICT),
+    CREDENCIALES_INCORRECTAS("AUTH_003", "Usuario o contraseÃ±a incorrectos", HttpStatus.UNAUTHORIZED),
+    USUARIO_NO_ENCONTRADO("AUTH_004", "El usuario solicitado no existe", HttpStatus.NOT_FOUND),
+
+    // â”€â”€ Tokens y SesiÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    TOKEN_INVALIDO("AUTH_002", "El token proporcionado no es vÃ¡lido", HttpStatus.UNAUTHORIZED),
+    TOKEN_EXPIRADO("AUTH_005", "La sesiÃ³n ha expirado, por favor inicie sesiÃ³n nuevamente", HttpStatus.UNAUTHORIZED),
+    TOKEN_REVOCADO("AUTH_006", "El token ha sido invalidado (logout)", HttpStatus.UNAUTHORIZED),
+    REFRESH_TOKEN_REQUERIDO("AUTH_007", "Se requiere un token de refresco vÃ¡lido", HttpStatus.BAD_REQUEST),
+
+    // â”€â”€ VerificaciÃ³n de Cuenta â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    CUENTA_YA_VERIFICADA("AUTH_010", "Esta cuenta ya ha sido verificada previamente", HttpStatus.BAD_REQUEST),
+    CODIGO_INVALIDO("AUTH_011", "El cÃ³digo de verificaciÃ³n ingresado es incorrecto", HttpStatus.BAD_REQUEST),
+    CODIGO_EXPIRADO("AUTH_012", "El cÃ³digo ha expirado, por favor solicite uno nuevo", HttpStatus.GONE),
+
+    // â”€â”€ v1.5: Account Lockout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    CUENTA_BLOQUEADA("AUTH_013", "Cuenta bloqueada temporalmente por mÃºltiples intentos fallidos. Intente en 15 minutos.", HttpStatus.LOCKED),
+
+    // â”€â”€ v1.5: Token Families â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    TOKEN_FAMILY_COMPROMETIDA("AUTH_014", "Se detectÃ³ uso sospechoso de sesiÃ³n. Por seguridad, inicie sesiÃ³n nuevamente.", HttpStatus.UNAUTHORIZED),
+
+    // â”€â”€ v1.5: Max Verification Attempts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    MAX_INTENTOS_VERIFICACION("AUTH_015", "Demasiados intentos de verificaciÃ³n. Solicite un nuevo cÃ³digo.", HttpStatus.TOO_MANY_REQUESTS),
+
+    // â”€â”€ v1.5: OAuth2 Social Login â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    OAUTH2_TOKEN_INVALIDO("AUTH_020", "El token del proveedor externo no es vÃ¡lido o ha expirado", HttpStatus.UNAUTHORIZED),
+    OAUTH2_EMAIL_NO_VERIFICADO("AUTH_021", "El proveedor externo no proporcionÃ³ un email verificado", HttpStatus.BAD_REQUEST),
+
+    // â”€â”€ AutorizaciÃ³n (Roles) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    ACCESO_DENEGADO("AUTH_008", "No tiene permisos suficientes para realizar esta acciÃ³n", HttpStatus.FORBIDDEN),
+    CUENTA_DESACTIVADA("AUTH_009", "Su cuenta se encuentra desactivada", HttpStatus.FORBIDDEN),
+
+    // â”€â”€ Errores de Cliente y Formato â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    SOLICITUD_MAL_FORMADA("AUTH_400", "La solicitud contiene errores de formato o campos invÃ¡lidos", HttpStatus.BAD_REQUEST),
+    METODO_NO_PERMITIDO("AUTH_405", "El mÃ©todo HTTP no estÃ¡ permitido para este endpoint", HttpStatus.METHOD_NOT_ALLOWED),
+
+    // â”€â”€ Servidor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    ERROR_INTERNO("AUTH_500", "Ha ocurrido un error inesperado en el servidor", HttpStatus.INTERNAL_SERVER_ERROR),
+    ACCION_NO_PERMITIDA("AUTH_501", "Esta acciÃ³n no estÃ¡ permitida en este momento", HttpStatus.UNAUTHORIZED);
+
+    private final String codigo;
+    private final String mensajeDefault;
+    private final HttpStatus httpStatus;
+
+    ErrorCode(String codigo, String mensajeDefault, HttpStatus httpStatus) {
+        this.codigo = codigo;
+        this.mensajeDefault = mensajeDefault;
+        this.httpStatus = httpStatus;
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\exception\GlobalExceptionHandler.java ===
+package com.rapidocourier.servicio_auth.exception;
+
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // â”€â”€ 1. EXCEPCIONES DE NEGOCIO (Lee el estado dinÃ¡mico de tu ErrorCode) â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(BaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBase(BaseException ex) {
+        return ResponseEntity
+                .status(ex.getCodigoError().getHttpStatus())
+                .body(ApiResponse.error(ex.getCodigoError().getCodigo(), ex.getMessage()));
+    }
+
+    // â”€â”€ 2. ERRORES DE VALIDACIÃ“N EN PAYLOADS DE AUTENTICACIÃ“N (@Valid) â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
+        String msg = ex.getBindingResult().getFieldErrors().stream()
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .collect(Collectors.joining(", "));
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(msg));
+    }
+
+    // â”€â”€ 3. VALIDACIÃ“N DE PARÃMETROS EN URLS (@PathVariable / @RequestParam) â”€â”€
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException ex) {
+        String msg = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .collect(Collectors.joining(", "));
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(msg));
+    }
+
+    // â”€â”€ 4. ERRORES DE SEGURIDAD: CONTROL DE ACCESO DENEGADO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
+        log.warn("Intento de acceso no autorizado detectado: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("No tiene permisos suficientes para realizar esta acciÃ³n."));
+    }
+
+    // â”€â”€ 5. ERRORES DE SEGURIDAD: FALLOS EN LA AUTENTICACIÃ“N â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        log.warn("Fallo en las credenciales o sesiÃ³n de usuario: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Usuario o contraseÃ±a incorrectos, o token no vÃ¡lido."));
+    }
+
+    // â”€â”€ 6. JSON MAL ESTRUCTURADO O TIPOS DE DATOS ERRÃTICOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error("El cuerpo de la solicitud no es legible. Verifique el formato JSON y la validez de los campos."));
+    }
+
+    // â”€â”€ 7. RECURSO HTTP NO ENCONTRADO (404) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(NoResourceFoundException ex) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("Endpoint no encontrado: " + ex.getResourcePath()));
+    }
+
+    // â”€â”€ 8. EXCEPCIÃ“N ILEGAL (Mantenida de tu cÃ³digo original) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException ex) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(ex.getMessage()));
+    }
+
+    // â”€â”€ 9. CATCH-ALL: ERRORES INTERNOS DEL SERVIDOR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneral(Exception ex) {
+        log.error("[servicio-auth] Error crÃ­tico no controlado: ", ex);
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error("Ha ocurrido un error inesperado en el servidor."));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\repository\RolRepository.java ===
+package com.rapidocourier.servicio_auth.repository;
+
+import com.rapidocourier.servicio_auth.entity.Rol;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface RolRepository extends JpaRepository<Rol, UUID> {
+    Optional<Rol> findByNombre(String nombre);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\repository\UsuarioRepository.java ===
+package com.rapidocourier.servicio_auth.repository;
+import com.rapidocourier.servicio_auth.entity.Usuario;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface UsuarioRepository extends JpaRepository<Usuario, UUID> {
+    Optional<Usuario> findByEmail(String email);
+    boolean existsByEmail(String email);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\security\JwtProvider.java ===
+package com.rapidocourier.servicio_auth.security;
+
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.util.Date;
+
+@Component
+public class JwtProvider {
+
+    @Value("${jwt.secret}")
+    private String jwtSecret;
+
+    @Value("${jwt.expiration:86400000}")
+    private long jwtExpirationMs;
+
+    public String generarToken(String email, String rol) {
+        SecretKey key = Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
+
+        return Jwts.builder()
+                .subject(email)
+                .claim("role", rol)
+                .issuedAt(new Date())
+                .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+                .signWith(key)
+                .compact();
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\security\SecurityConfig.java ===
+package com.rapidocourier.servicio_auth.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                // Dejamos pasar todo porque el API Gateway ya se encarga de proteger las rutas
+                // y el servicio de auth tiene su propia validacion para Register a traves de los headers X-User-Role
+                .anyRequest().permitAll()
+            );
+
+        return http.build();
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-auth\src\main\java\com\rapidocourier\servicio_auth\service\AuthService.java ===
+package com.rapidocourier.servicio_auth.service;
+
+import com.rapidocourier.servicio_auth.dto.request.LoginRequest;
+import com.rapidocourier.servicio_auth.dto.request.RegisterRequest;
+import com.rapidocourier.servicio_auth.dto.response.AuthResponse;
+import com.rapidocourier.servicio_auth.entity.Rol;
+import com.rapidocourier.servicio_auth.entity.Usuario;
+import com.rapidocourier.servicio_auth.exception.ErrorCode;
+import com.rapidocourier.servicio_auth.repository.RolRepository;
+import com.rapidocourier.servicio_auth.repository.UsuarioRepository;
+import com.rapidocourier.servicio_auth.security.JwtProvider;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AuthService {
+
+    private final UsuarioRepository usuarioRepository;
+    private final RolRepository rolRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtProvider jwtProvider;
+
+    public AuthService(UsuarioRepository usuarioRepository, RolRepository rolRepository, PasswordEncoder passwordEncoder, JwtProvider jwtProvider) {
+        this.usuarioRepository = usuarioRepository;
+        this.rolRepository = rolRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtProvider = jwtProvider;
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        Usuario usuario = usuarioRepository.findByEmail(request.email())
+                .orElseThrow(() -> new BaseException(ErrorCode.CREDENCIALES_INCORRECTAS));
+
+        if (!passwordEncoder.matches(request.password(), usuario.getPassword())) {
+            throw new BaseException(ErrorCode.ACCESO_DENEGADO);
+        }
+
+        String token = jwtProvider.generarToken(usuario.getEmail(), usuario.getRol().getNombre());
+        return new AuthResponse(token, usuario.getEmail(), usuario.getRol().getNombre());
+    }
+
+    public AuthResponse register(RegisterRequest request, String executorRole) {
+        if (!"ADMIN".equalsIgnoreCase(executorRole)) {
+            throw new BaseException(ErrorCode.ACCESO_DENEGADO); // Usando tu cÃ³digo AUTH_008
+        }
+
+        if (usuarioRepository.findByEmail(request.email()).isPresent()) {
+            throw new BaseException(ErrorCode.CORREO_YA_EXISTE); // Usando tu cÃ³digo AUTH_001
+        }
+
+        Rol rol = rolRepository.findByNombre(request.rol().toUpperCase())
+                .orElseThrow(() -> new BaseException(ErrorCode.SOLICITUD_MAL_FORMADA));
+
+        Usuario nuevo = new Usuario();
+        nuevo.setNombre(request.nombre());
+        nuevo.setEmail(request.email());
+        nuevo.setPassword(passwordEncoder.encode(request.password()));
+        nuevo.setRol(rol);
+
+        usuarioRepository.save(nuevo);
+
+        String token = jwtProvider.generarToken(nuevo.getEmail(), nuevo.getRol().getNombre());
+        return new AuthResponse(token, nuevo.getEmail(), nuevo.getRol().getNombre());
+    }
+}
