@@ -1,0 +1,56 @@
+# === application.yaml ===
+server:
+  port: 8086
+
+spring:
+  application:
+    name: servicio-envios
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL}"
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/db_envios}
+    username: ${DB_USERNAME:rapidouser}
+    password: ${DB_PASSWORD:rapidopass}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    baseline-on-migrate: true
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+
+# ── Configuración de Eureka ──
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE}
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    prefer-ip-address: true
+
+# ── Endpoints de Actuator (Incluye resiliencia) ──
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,refresh,mappings,circuitbreakers
+
+logging:
+  level:
+    root: INFO
+    org.springframework.web: TRACE
+    com.rapidocourier: DEBUG
+
+cloudflare:
+  r2:
+    access-key: ${CLOUDFLARE_R2_ACCESS_KEY:dummy-access-key}
+    secret-key: ${CLOUDFLARE_R2_SECRET_KEY:dummy-secret-key}
+    endpoint: ${CLOUDFLARE_R2_ENDPOINT:https://dummy.r2.cloudflarestorage.com}
+    bucket-name: ${CLOUDFLARE_R2_BUCKET_NAME:dummy-bucket}
+    public-url-prefix: ${CLOUDFLARE_R2_PUBLIC_URL_PREFIX:https://dummy.url}

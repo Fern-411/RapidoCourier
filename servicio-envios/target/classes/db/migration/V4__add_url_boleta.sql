@@ -1,0 +1,1 @@
+ALTER TABLE envios ADD COLUMN url_boleta VARCHAR(500);
