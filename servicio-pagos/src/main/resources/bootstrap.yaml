@@ -1,0 +1,15 @@
+# === bootstrap.yaml ===
+spring:
+  application:
+    name: servicio-pagos
+  cloud:
+    vault:
+      # Atrapa el host desde el entorno (ej. 'vault' en Docker) o usa localhost
+      host: ${VAULT_HOST:localhost}
+      port: 8200
+      scheme: http
+      token: root
+      kv:
+        enabled: true
+        backend: secret
+        default-context: rapidocourier/pagos

@@ -1,0 +1,15 @@
+# === bootstrap.yaml ===
+spring:
+  application:
+    name: servicio-notificaciones
+  cloud:
+    vault:
+      # Atrapa la variable de tu entorno Docker, o usa localhost por defecto
+      host: ${VAULT_HOST:localhost}
+      port: 8200
+      scheme: http
+      token: root
+      kv:
+        enabled: true
+        backend: secret
+        default-context: rapidocourier/notificaciones

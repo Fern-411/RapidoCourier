@@ -1,0 +1,210 @@
+﻿=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\ServicioNotificacionesApplication.java ===
+package com.rapidocourier.servicio_notificaciones;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
+import org.springframework.cloud.openfeign.EnableFeignClients;
+
+@SpringBootApplication
+@EnableDiscoveryClient
+@EnableFeignClients
+public class ServicioNotificacionesApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(ServicioNotificacionesApplication.class, args);
+	}
+
+}
+
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\controller\NotificacionController.java ===
+package com.rapidocourier.servicio_notificaciones.controller;
+
+import com.rapidocourier.servicio_notificaciones.dto.response.NotificacionResponse;
+import com.rapidocourier.servicio_notificaciones.service.NotificacionService;
+import com.rapidocourier.shared_kernel.dto.response.ApiResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/v1/notificaciones")
+@RequiredArgsConstructor
+@Tag(name = "Notificaciones", description = "API para la gestiÃ³n y registro de notificaciones de paquetes")
+public class NotificacionController {
+
+    private final NotificacionService notificacionService;
+
+    @Operation(
+            summary = "Enviar notificaciÃ³n",
+            description = "Registra y procesa una nueva notificaciÃ³n de estado para un paquete especÃ­fico en el sistema."
+    )
+    @PostMapping("/enviar")
+    public ResponseEntity<ApiResponse<NotificacionResponse>> enviarNotificacion(@RequestBody NotificacionRequest request) {
+        NotificacionResponse response = notificacionService.enviarNotificacion(request.paqueteId(), request.mensaje());
+        return ResponseEntity.ok(ApiResponse.ok("NotificaciÃ³n enviada correctamente", response));
+    }
+
+    @Operation(
+            summary = "Listar notificaciones por paquete",
+            description = "Obtiene todo el historial de notificaciones enviadas a un paquete especÃ­fico."
+    )
+    @GetMapping("/paquete/{paqueteId}")
+    public ResponseEntity<ApiResponse<List<NotificacionResponse>>> obtenerNotificacionesPorPaquete(
+            @Parameter(description = "UUID del paquete", required = true)
+            @PathVariable UUID paqueteId) {
+
+        List<NotificacionResponse> notificaciones = notificacionService.obtenerPorPaquete(paqueteId);
+        return ResponseEntity.ok(ApiResponse.ok("Historial de notificaciones recuperado", notificaciones));
+    }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\dto\response\NotificacionResponse.java ===
+package com.rapidocourier.servicio_notificaciones.dto.response;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record NotificacionResponse(
+        UUID id,
+        UUID paqueteId,
+        String mensaje,
+        String estado,
+        LocalDateTime fechaEnvio
+) {}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\entity\Notificacion.java ===
+package com.rapidocourier.servicio_notificaciones.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import org.hibernate.annotations.CreationTimestamp;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Table(name = "notificaciones")
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
+public class Notificacion {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @Column(nullable = false)
+    private UUID paqueteId;
+
+    @Column(nullable = false, length = 500)
+    private String mensaje;
+
+    @Column(nullable = false, length = 20)
+    private String estado = "ENVIADA";
+
+    @CreationTimestamp
+    @Column(updatable = false)
+    private LocalDateTime fechaEnvio;
+
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\exception\ErrorCode.java ===
+package com.rapidocourier.servicio_notificaciones.exception;
+
+import com.rapidocourier.shared_kernel.exception.CodigoError;
+import org.springframework.http.HttpStatus;
+
+public enum ErrorCode implements CodigoError {
+
+    PAQUETE_ID_NULO("NOT_400", "El ID del paquete es obligatorio", HttpStatus.BAD_REQUEST),
+    MENSAJE_VACIO("NOT_400", "El mensaje de la notificaciÃ³n no puede estar vacÃ­o", HttpStatus.BAD_REQUEST),
+    ERROR_ENVIO("NOT_500", "Error interno al procesar la notificaciÃ³n", HttpStatus.INTERNAL_SERVER_ERROR);
+
+    private final String codigo;
+    private final String mensajeDefault;
+    private final HttpStatus httpStatus;
+
+    ErrorCode(String codigo, String mensajeDefault, HttpStatus httpStatus) {
+        this.codigo = codigo;
+        this.mensajeDefault = mensajeDefault;
+        this.httpStatus = httpStatus;
+    }
+
+    @Override public String getCodigo() { return codigo; }
+    @Override public String getMensajeDefault() { return mensajeDefault; }
+    @Override public HttpStatus getHttpStatus() { return httpStatus; }
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\repository\NotificacionRepository.java ===
+package com.rapidocourier.servicio_notificaciones.repository;
+
+import com.rapidocourier.servicio_notificaciones.entity.Notificacion;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.UUID;
+
+public interface NotificacionRepository extends JpaRepository<Notificacion, UUID> {
+    List<Notificacion> findByPaqueteId(UUID paqueteId);
+    List<Notificacion> findByPaqueteIdOrderByFechaEnvioDesc(UUID paqueteId);
+}
+=== D:\TECSUP\JAVA MICROSERVICIOS\RAPIDO COURIER\servicio-notificaciones\src\main\java\com\rapidocourier\servicio_notificaciones\service\NotificacionService.java ===
+package com.rapidocourier.servicio_notificaciones.service;
+
+import com.rapidocourier.servicio_notificaciones.dto.response.NotificacionResponse;
+import com.rapidocourier.servicio_notificaciones.entity.Notificacion;
+import com.rapidocourier.servicio_notificaciones.exception.ErrorCode;
+import com.rapidocourier.servicio_notificaciones.repository.NotificacionRepository;
+import com.rapidocourier.shared_kernel.exception.BaseException;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class NotificacionService {
+
+    private static final Logger logger = LoggerFactory.getLogger(NotificacionService.class);
+    private final NotificacionRepository notificacionRepository;
+
+    @Transactional
+    public NotificacionResponse enviarNotificacion(NotificacionRequest request) { // Recibe el DTO
+        if (request.paqueteId() == null) throw new BaseException(ErrorCode.PAQUETE_ID_NULO);
+        if (request.mensaje() == null || request.mensaje().trim().isEmpty()) throw new BaseException(ErrorCode.MENSAJE_VACIO);
+
+        Notificacion notificacion = new Notificacion();
+        notificacion.setPaqueteId(request.paqueteId());
+        notificacion.setMensaje(request.mensaje());
+        notificacion.setEstado("ENVIADA");
+
+        Notificacion guardada = notificacionRepository.save(notificacion);
+        return new NotificacionResponse(...);
+    }
+    // ... dentro de NotificacionService.java
+
+    @Transactional
+    public List<NotificacionResponse> obtenerPorPaquete(UUID paqueteId) {
+        return notificacionRepository.findByPaqueteIdOrderByFechaEnvioDesc(paqueteId)
+                .stream()
+                .map(n -> new NotificacionResponse(
+                        n.getId(),
+                        n.getPaqueteId(),
+                        n.getMensaje(),
+                        n.getEstado(),
+                        n.getFechaEnvio()
+                ))
+                .toList();
+    }
+}
